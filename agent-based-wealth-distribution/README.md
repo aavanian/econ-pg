@@ -314,6 +314,41 @@ sim = Simulation(
 - Return a numpy array of growth rates in **percentage points**
 - The wealth-weighted average will be automatically adjusted to match `aggregate_growth_per_step`
 
+#### Visualizing Growth Rate Distributions
+
+To help understand your growth rate distribution before running a simulation, use `plot_growth_pdf`:
+
+```python
+from src.visualization import plot_growth_pdf
+import matplotlib.pyplot as plt
+
+# Visualize a single distribution
+normal_pdf = lambda size: np.random.normal(0, 5.0, size)
+fig = plot_growth_pdf(normal_pdf, label1="Normal(0, 5)")
+plt.show()
+
+# Compare two distributions
+low_vol = lambda size: np.random.normal(0, 2.0, size)
+high_vol = lambda size: np.random.normal(0, 15.0, size)
+fig = plot_growth_pdf(
+    low_vol, high_vol,
+    label1="Low Volatility (σ=2)",
+    label2="High Volatility (σ=15)"
+)
+plt.show()
+
+# The plot shows:
+# - Histogram of sampled growth rates (density-normalized)
+# - Mean and median lines
+# - Summary statistics (mean, median, std, min, max, skewness)
+```
+
+This is useful for:
+- Understanding the shape of your distribution (symmetric, skewed, bimodal, etc.)
+- Comparing different parameter choices
+- Checking for extreme values or outliers
+- Verifying that your custom distribution works as expected
+
 ## Parameters
 
 ### Simulation Parameters

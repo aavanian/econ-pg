@@ -336,3 +336,103 @@ def plot_distribution_snapshots(
     plt.tight_layout()
 
     return fig
+
+
+def plot_growth_pdf(
+    growth_pdf1,
+    growth_pdf2=None,
+    sample_size: int = 10000,
+    bins: int = 50,
+    label1: str = "PDF 1",
+    label2: str = "PDF 2",
+    figsize: tuple = (12, 6),
+) -> Figure:
+    """
+    Visualize one or two growth rate probability distributions.
+
+    Args:
+        growth_pdf1: First growth PDF callable (takes size, returns growth rates)
+        growth_pdf2: Optional second growth PDF for comparison
+        sample_size: Number of samples to draw for visualization
+        bins: Number of histogram bins
+        label1: Label for first PDF
+        label2: Label for second PDF
+        figsize: Figure size tuple
+
+    Returns:
+        Matplotlib Figure object
+
+    Example:
+        >>> from functools import partial
+        >>> # Compare normal and uniform distributions
+        >>> normal_pdf = lambda size: np.random.normal(0, 5, size)
+        >>> uniform_pdf = lambda size: np.random.uniform(-10, 10, size)
+        >>> fig = plot_growth_pdf(normal_pdf, uniform_pdf,
+        ...                       label1="Normal(0,5)", label2="Uniform(-10,10)")
+        >>> plt.show()
+    """
+    # Sample from the distributions
+    np.random.seed(42)  # For reproducibility in visualization
+    samples1 = growth_pdf1(sample_size)
+
+    if growth_pdf2 is not None:
+        samples2 = growth_pdf2(sample_size)
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+
+        # Plot first PDF
+        ax1.hist(samples1, bins=bins, alpha=0.7, edgecolor="black", density=True, label=label1)
+        ax1.axvline(np.mean(samples1), color="red", linestyle="--", linewidth=2, label=f"Mean: {np.mean(samples1):.2f}")
+        ax1.axvline(np.median(samples1), color="green", linestyle="--", linewidth=2, label=f"Median: {np.median(samples1):.2f}")
+        ax1.set_xlabel("Growth Rate (percentage points)")
+        ax1.set_ylabel("Density")
+        ax1.set_title(label1)
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+        ax1.text(0.02, 0.98, f"Std: {np.std(samples1):.2f}\nMin: {np.min(samples1):.2f}\nMax: {np.max(samples1):.2f}",
+                transform=ax1.transAxes, verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+        # Plot second PDF
+        ax2.hist(samples2, bins=bins, alpha=0.7, edgecolor="black", density=True, label=label2, color='orange')
+        ax2.axvline(np.mean(samples2), color="red", linestyle="--", linewidth=2, label=f"Mean: {np.mean(samples2):.2f}")
+        ax2.axvline(np.median(samples2), color="green", linestyle="--", linewidth=2, label=f"Median: {np.median(samples2):.2f}")
+        ax2.set_xlabel("Growth Rate (percentage points)")
+        ax2.set_ylabel("Density")
+        ax2.set_title(label2)
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+        ax2.text(0.02, 0.98, f"Std: {np.std(samples2):.2f}\nMin: {np.min(samples2):.2f}\nMax: {np.max(samples2):.2f}",
+                transform=ax2.transAxes, verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+        fig.suptitle("Growth Rate Distribution Comparison", fontsize=14, fontweight="bold")
+
+    else:
+        # Single PDF
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        ax.hist(samples1, bins=bins, alpha=0.7, edgecolor="black", density=True, label=label1)
+        ax.axvline(np.mean(samples1), color="red", linestyle="--", linewidth=2, label=f"Mean: {np.mean(samples1):.2f}")
+        ax.axvline(np.median(samples1), color="green", linestyle="--", linewidth=2, label=f"Median: {np.median(samples1):.2f}")
+        ax.set_xlabel("Growth Rate (percentage points)")
+        ax.set_ylabel("Density")
+        ax.set_title(f"Growth Rate Distribution: {label1}")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+        # Add statistics text box
+        stats_text = f"Statistics:\n"
+        stats_text += f"Mean: {np.mean(samples1):.2f}\n"
+        stats_text += f"Median: {np.median(samples1):.2f}\n"
+        stats_text += f"Std: {np.std(samples1):.2f}\n"
+        stats_text += f"Min: {np.min(samples1):.2f}\n"
+        stats_text += f"Max: {np.max(samples1):.2f}\n"
+        stats_text += f"Skewness: {((samples1 - np.mean(samples1))**3).mean() / np.std(samples1)**3:.2f}"
+
+        ax.text(0.98, 0.98, stats_text,
+               transform=ax.transAxes, verticalalignment='top', horizontalalignment='right',
+               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8),
+               fontsize=10, family='monospace')
+
+    plt.tight_layout()
+    return fig
