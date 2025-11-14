@@ -223,16 +223,18 @@ The notebook includes:
 
 ### Programmatic Usage
 
+#### Basic Usage
+
 ```python
 from src.simulation import Simulation
 from src.visualization import create_dashboard
 
-# Create simulation
+# Create simulation with default normal distribution
 sim = Simulation(
     num_agents=100,
     initial_wealth_min=0.0,
     initial_wealth_max=100.0,
-    aggregate_growth_per_step=10.0,
+    aggregate_growth_per_step=2.0,
     wealth_change_std=5.0,
     random_seed=42,
 )
@@ -251,6 +253,67 @@ fig = create_dashboard(history, final_wealths)
 plt.savefig('my_results.png')
 ```
 
+#### Custom Growth Rate Distributions
+
+You can specify any probability distribution for growth rates using the `growth_pdf` parameter:
+
+```python
+import numpy as np
+from functools import partial
+
+# Example 1: Lambda with normal distribution
+sim = Simulation(
+    num_agents=100,
+    aggregate_growth_per_step=2.0,
+    growth_pdf=lambda size: np.random.normal(0, 5.0, size),
+    random_seed=42,
+)
+
+# Example 2: Using functools.partial
+sim = Simulation(
+    num_agents=100,
+    aggregate_growth_per_step=2.0,
+    growth_pdf=partial(np.random.normal, 0, 5.0),  # loc=0, scale=5.0
+    random_seed=42,
+)
+
+# Example 3: Uniform distribution (bounded volatility)
+sim = Simulation(
+    num_agents=100,
+    aggregate_growth_per_step=2.0,
+    growth_pdf=lambda size: np.random.uniform(-10, 10, size),
+    random_seed=42,
+)
+
+# Example 4: Laplace distribution (fat tails)
+sim = Simulation(
+    num_agents=100,
+    aggregate_growth_per_step=2.0,
+    growth_pdf=lambda size: np.random.laplace(0, 3.0, size),
+    random_seed=42,
+)
+
+# Example 5: Custom mixed distribution (bimodal)
+def bimodal_growth(size):
+    """Half agents from low-growth regime, half from high-growth."""
+    half = size // 2
+    low = np.random.normal(-5, 2, half)
+    high = np.random.normal(5, 2, size - half)
+    return np.concatenate([low, high])
+
+sim = Simulation(
+    num_agents=100,
+    aggregate_growth_per_step=2.0,
+    growth_pdf=bimodal_growth,
+    random_seed=42,
+)
+```
+
+**Note**: The `growth_pdf` function should:
+- Accept a single `size` parameter (int)
+- Return a numpy array of growth rates in **percentage points**
+- The wealth-weighted average will be automatically adjusted to match `aggregate_growth_per_step`
+
 ## Parameters
 
 ### Simulation Parameters
@@ -261,7 +324,8 @@ plt.savefig('my_results.png')
 | `initial_wealth_min` | float | Minimum initial wealth | 0.0 | ≥ 0 |
 | `initial_wealth_max` | float | Maximum initial wealth | 100.0 | ≥ initial_wealth_min |
 | `aggregate_growth_per_step` | float | Percentage growth rate per time step (compound) | 2.0 | Any (can be negative) |
-| `wealth_change_std` | float | Standard deviation of individual growth rates (in percentage points) | 5.0 | ≥ 0 |
+| `wealth_change_std` | float | Standard deviation of individual growth rates (used if growth_pdf is None) | 5.0 | ≥ 0 |
+| `growth_pdf` | Callable or None | Custom function to generate growth rates: `f(size: int) -> np.ndarray`. If None, uses N(0, wealth_change_std) | None | Callable or None |
 | `random_seed` | int or None | Random seed for reproducibility | None | Any integer |
 
 ### Run Parameters

@@ -28,7 +28,12 @@ class Simulation:
         initial_wealth_max: Maximum initial wealth (uniform distribution)
         aggregate_growth_per_step: Aggregate growth rate per time step in % (e.g., 2.0 = 2%)
         wealth_change_std: Standard deviation of individual growth rates in percentage
-                          points (e.g., 5.0 means rates vary by ±5 percentage points)
+                          points (used only if growth_pdf is None)
+        growth_pdf: Optional callable that generates growth rates. Should accept size parameter
+                   and return array of growth rates in percentage points.
+                   Examples: lambda size: np.random.normal(0, 5, size)
+                            partial(np.random.lognormal, mean=0, sigma=0.5)
+                   If None, uses normal distribution with wealth_change_std.
         random_seed: Seed for reproducibility (optional)
         agents: List of Agent objects (initialized automatically)
         history: DataFrame tracking wealth over time (populated during simulation)
@@ -47,6 +52,7 @@ class Simulation:
     initial_wealth_max: float = 100.0
     aggregate_growth_per_step: float = 2.0
     wealth_change_std: float = 5.0
+    growth_pdf: Optional[Callable[[int], np.ndarray]] = None
     random_seed: Optional[int] = None
     agents: list[Agent] = field(default_factory=list, init=False, repr=False)
     history: pd.DataFrame = field(default_factory=pd.DataFrame, init=False, repr=False)
@@ -101,7 +107,7 @@ class Simulation:
             individual growth rates equals the aggregate target rate.
 
         Algorithm:
-            1. Draw individual growth rates: raw_gr[i] ~ N(0, σ²) in percentage points
+            1. Draw individual growth rates using growth_pdf or default N(0, σ²)
             2. Calculate wealth-weighted average: avg = sum(W[i]×raw_gr[i]) / sum(W[i])
             3. Adjust to satisfy constraint: gr[i] = raw_gr[i] + (GR - avg)
             4. Calculate absolute changes: change[i] = W[i] × (gr[i] / 100)
@@ -113,8 +119,11 @@ class Simulation:
         current_wealths = np.array([agent.wealth for agent in self.agents])
         total_wealth = np.sum(current_wealths)
 
-        # Draw raw growth rates from normal distribution (in percentage points)
-        raw_growth_rates = np.random.normal(0, self.wealth_change_std, self.num_agents)
+        # Draw raw growth rates using custom PDF or default normal distribution
+        if self.growth_pdf is not None:
+            raw_growth_rates = self.growth_pdf(self.num_agents)
+        else:
+            raw_growth_rates = np.random.normal(0, self.wealth_change_std, self.num_agents)
 
         # Calculate wealth-weighted average growth rate
         weighted_avg = np.sum(current_wealths * raw_growth_rates) / total_wealth
