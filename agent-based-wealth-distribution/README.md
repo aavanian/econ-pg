@@ -54,12 +54,13 @@ Manages the population and time-stepping dynamics.
 - Assigns initial wealth from uniform distribution U(min, max)
 
 **Time step algorithm**:
-1. Draw raw wealth changes from N(0, σ²) for each agent
-2. Calculate adjustment needed: `adj = (target_growth - sum(raw_changes)) / num_agents`
-3. Apply adjusted changes: `change[i] = raw_change[i] + adj`
-4. Update each agent's wealth, enforcing non-negativity
+1. Calculate target growth: `target = current_total_wealth × (growth_rate / 100)`
+2. Draw raw wealth changes from N(0, σ²) for each agent
+3. Calculate adjustment needed: `adj = (target - sum(raw_changes)) / num_agents`
+4. Apply adjusted changes: `change[i] = raw_change[i] + adj`
+5. Update each agent's wealth, enforcing non-negativity
 
-**Key constraint**: ∑ᵢ change[i] = aggregate_growth_per_step (exactly)
+**Key constraint**: ∑ᵢ change[i] = current_total_wealth × (growth_rate / 100) (exactly)
 
 #### 3. Visualization Module (`src/visualization.py`)
 Provides functions to visualize:
@@ -73,17 +74,22 @@ Provides functions to visualize:
 Let:
 - $W_{i,t}$ = wealth of agent $i$ at time $t$
 - $\Delta W_{i,t}$ = wealth change for agent $i$ at time $t$
-- $G$ = aggregate growth per time step
+- $g$ = aggregate growth rate per time step (percentage, e.g., 2.0 for 2%)
 - $\sigma$ = standard deviation of individual shocks
 - $N$ = number of agents
+- $W_{\text{total},t} = \sum_i W_{i,t}$ = total wealth at time $t$
 
 **Wealth evolution**:
 $$W_{i,t+1} = \max(0, W_{i,t} + \Delta W_{i,t})$$
 
 **Wealth change generation**:
-1. Draw: $\epsilon_i \sim \mathcal{N}(0, \sigma^2)$ for each agent
-2. Compute: $\Delta W_{i,t} = \epsilon_i + \frac{G - \sum_j \epsilon_j}{N}$
-3. Constraint: $\sum_i \Delta W_{i,t} = G$ (exactly satisfied)
+1. Calculate target growth: $G_t = W_{\text{total},t} \times \frac{g}{100}$
+2. Draw: $\epsilon_i \sim \mathcal{N}(0, \sigma^2)$ for each agent
+3. Compute: $\Delta W_{i,t} = \epsilon_i + \frac{G_t - \sum_j \epsilon_j}{N}$
+4. Constraint: $\sum_i \Delta W_{i,t} = G_t$ (exactly satisfied)
+
+**Aggregate wealth evolution** (compound growth):
+$$W_{\text{total},t} = W_{\text{total},0} \times \left(1 + \frac{g}{100}\right)^t$$
 
 **Inequality measure** (Gini coefficient):
 $$\text{Gini} = \frac{2 \sum_{i=1}^N i \cdot W_i^{\text{sorted}}}{N \sum_{i=1}^N W_i} - \frac{N+1}{N}$$
@@ -249,7 +255,7 @@ plt.savefig('my_results.png')
 | `num_agents` | int | Number of agents in population | 100 | > 0 |
 | `initial_wealth_min` | float | Minimum initial wealth | 0.0 | ≥ 0 |
 | `initial_wealth_max` | float | Maximum initial wealth | 100.0 | ≥ initial_wealth_min |
-| `aggregate_growth_per_step` | float | Total wealth growth per time step | 10.0 | Any (can be negative) |
+| `aggregate_growth_per_step` | float | Percentage growth rate per time step (compound) | 2.0 | Any (can be negative) |
 | `wealth_change_std` | float | Standard deviation of individual shocks | 5.0 | ≥ 0 |
 | `random_seed` | int or None | Random seed for reproducibility | None | Any integer |
 

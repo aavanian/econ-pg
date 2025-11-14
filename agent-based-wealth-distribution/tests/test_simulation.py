@@ -59,19 +59,24 @@ def test_initial_wealth_distribution():
 
 
 def test_aggregate_growth_constraint():
-    """Test that aggregate growth constraint is satisfied."""
+    """Test that aggregate growth constraint is satisfied (percentage-based)."""
     sim = Simulation(
         num_agents=100,
-        aggregate_growth_per_step=10.0,
+        initial_wealth_min=100.0,
+        initial_wealth_max=100.0,
+        aggregate_growth_per_step=2.0,  # 2% growth
         random_seed=42,
     )
 
     initial_total = np.sum(sim.get_wealth_array())
+    expected_growth = initial_total * 0.02  # 2% of initial total
+
     sim.step()
     final_total = np.sum(sim.get_wealth_array())
 
-    # Check that total wealth increased by exactly the target amount
-    assert np.isclose(final_total - initial_total, 10.0)
+    # Check that total wealth increased by exactly the target percentage
+    actual_growth = final_total - initial_total
+    assert np.isclose(actual_growth, expected_growth, rtol=1e-10)
 
 
 def test_simulation_run():
@@ -141,3 +146,27 @@ def test_wealth_non_negativity():
 
     # All wealths should be non-negative
     assert np.all(wealths >= 0)
+
+
+def test_compound_growth():
+    """Test that compound growth works correctly over multiple periods."""
+    sim = Simulation(
+        num_agents=100,
+        initial_wealth_min=100.0,
+        initial_wealth_max=100.0,
+        aggregate_growth_per_step=2.0,  # 2% growth
+        wealth_change_std=5.0,
+        random_seed=42,
+    )
+
+    initial_total = np.sum(sim.get_wealth_array())
+    assert np.isclose(initial_total, 10000.0)  # 100 agents × 100 wealth
+
+    # Run for 100 steps
+    sim.run(num_steps=100)
+
+    final_total = sim.get_statistics()["total_wealth"]
+    expected_total = initial_total * (1.02 ** 100)
+
+    # Should match compound growth formula within small tolerance
+    assert np.isclose(final_total, expected_total, rtol=1e-8)

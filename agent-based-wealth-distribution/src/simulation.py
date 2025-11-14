@@ -26,7 +26,7 @@ class Simulation:
         num_agents: Number of agents in the population
         initial_wealth_min: Minimum initial wealth (uniform distribution)
         initial_wealth_max: Maximum initial wealth (uniform distribution)
-        aggregate_growth_per_step: Total wealth growth per time step
+        aggregate_growth_per_step: Percentage growth rate per time step (e.g., 2.0 = 2%)
         wealth_change_std: Standard deviation of individual wealth changes
         random_seed: Seed for reproducibility (optional)
         agents: List of Agent objects (initialized automatically)
@@ -35,7 +35,7 @@ class Simulation:
     Economic Intuition:
         This model captures the dynamics of wealth distribution in an economy where:
         1. Agents start with heterogeneous initial endowments
-        2. The economy grows at a fixed rate (aggregate_growth_per_step)
+        2. The economy grows at a fixed percentage rate (compound growth)
         3. Individual outcomes are stochastic, creating winners and losers
         4. The interplay between systematic growth and random shocks drives
            the evolution of inequality
@@ -44,7 +44,7 @@ class Simulation:
     num_agents: int = 100
     initial_wealth_min: float = 0.0
     initial_wealth_max: float = 100.0
-    aggregate_growth_per_step: float = 10.0
+    aggregate_growth_per_step: float = 2.0
     wealth_change_std: float = 5.0
     random_seed: Optional[int] = None
     agents: list[Agent] = field(default_factory=list, init=False, repr=False)
@@ -96,27 +96,34 @@ class Simulation:
         Economic Intuition:
             Individual wealth changes are drawn from a normal distribution
             (representing idiosyncratic shocks), then normalized to ensure
-            the aggregate equals the target growth. This creates a zero-sum
-            component (relative gains/losses) plus systematic growth.
+            the aggregate equals the target growth rate. This creates a zero-sum
+            component (relative gains/losses) plus systematic compound growth.
 
         Algorithm:
-            1. Draw random changes from N(0, σ²)
-            2. Adjust so sum equals aggregate_growth_per_step:
+            1. Calculate target absolute growth: current_total × (rate / 100)
+            2. Draw random changes from N(0, σ²)
+            3. Adjust so sum equals target absolute growth:
                adjusted_change[i] = raw_change[i] + (target - sum(raw)) / n
         """
+        # Calculate current total wealth
+        current_total_wealth = np.sum([agent.wealth for agent in self.agents])
+
+        # Calculate target absolute growth based on percentage rate
+        target_growth = current_total_wealth * (self.aggregate_growth_per_step / 100.0)
+
         # Draw random changes from normal distribution (mean=0)
         raw_changes = np.random.normal(0, self.wealth_change_std, self.num_agents)
 
         # Calculate the adjustment needed to hit target aggregate growth
         current_sum = np.sum(raw_changes)
-        adjustment = (self.aggregate_growth_per_step - current_sum) / self.num_agents
+        adjustment = (target_growth - current_sum) / self.num_agents
 
         # Apply adjustment uniformly to all agents
         adjusted_changes = raw_changes + adjustment
 
         # Verify constraint is satisfied (within numerical precision)
         assert np.isclose(
-            np.sum(adjusted_changes), self.aggregate_growth_per_step
+            np.sum(adjusted_changes), target_growth
         ), "Aggregate growth constraint violated"
 
         return adjusted_changes

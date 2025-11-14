@@ -26,7 +26,7 @@ def main():
     Economic Setup:
         - Population: 100 agents
         - Initial wealth: Uniformly distributed between 0 and 100
-        - Aggregate growth: 10 units per time step
+        - Aggregate growth: 2% per time step (compound growth)
         - Individual volatility: Standard deviation of 5
         - Time horizon: 100 steps
     """
@@ -40,7 +40,7 @@ def main():
         num_agents=100,
         initial_wealth_min=0.0,
         initial_wealth_max=100.0,
-        aggregate_growth_per_step=10.0,
+        aggregate_growth_per_step=2.0,  # 2% growth per step
         wealth_change_std=5.0,
         random_seed=42,
     )
