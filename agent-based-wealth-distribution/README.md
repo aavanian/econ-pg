@@ -53,14 +53,14 @@ Manages the population and time-stepping dynamics.
 - Creates `num_agents` agents
 - Assigns initial wealth from uniform distribution U(min, max)
 
-**Time step algorithm**:
-1. Calculate target growth: `target = current_total_wealth × (growth_rate / 100)`
-2. Draw raw wealth changes from N(0, σ²) for each agent
-3. Calculate adjustment needed: `adj = (target - sum(raw_changes)) / num_agents`
-4. Apply adjusted changes: `change[i] = raw_change[i] + adj`
-5. Update each agent's wealth, enforcing non-negativity
+**Time step algorithm** (multiplicative growth):
+1. Draw individual growth rates: `raw_gr[i] ~ N(0, σ²)` in percentage points
+2. Calculate wealth-weighted average: `avg = sum(W[i] × raw_gr[i]) / sum(W[i])`
+3. Adjust to satisfy constraint: `gr[i] = raw_gr[i] + (target_rate - avg)`
+4. Apply multiplicatively: `W[i] ← W[i] × (1 + gr[i]/100)`
+5. Enforce non-negativity: `W[i] ← max(0, W[i])`
 
-**Key constraint**: ∑ᵢ change[i] = current_total_wealth × (growth_rate / 100) (exactly)
+**Key constraint**: Wealth-weighted average of growth rates equals target rate (exactly)
 
 #### 3. Visualization Module (`src/visualization.py`)
 Provides functions to visualize:
@@ -73,23 +73,28 @@ Provides functions to visualize:
 
 Let:
 - $W_{i,t}$ = wealth of agent $i$ at time $t$
-- $\Delta W_{i,t}$ = wealth change for agent $i$ at time $t$
+- $gr_{i,t}$ = growth rate for agent $i$ at time $t$ (in percentage points)
 - $g$ = aggregate growth rate per time step (percentage, e.g., 2.0 for 2%)
-- $\sigma$ = standard deviation of individual shocks
+- $\sigma$ = standard deviation of individual growth rates (in percentage points)
 - $N$ = number of agents
 - $W_{\text{total},t} = \sum_i W_{i,t}$ = total wealth at time $t$
 
-**Wealth evolution**:
-$$W_{i,t+1} = \max(0, W_{i,t} + \Delta W_{i,t})$$
+**Wealth evolution** (multiplicative growth):
+$$W_{i,t+1} = \max\left(0, W_{i,t} \times \left(1 + \frac{gr_{i,t}}{100}\right)\right)$$
 
-**Wealth change generation**:
-1. Calculate target growth: $G_t = W_{\text{total},t} \times \frac{g}{100}$
-2. Draw: $\epsilon_i \sim \mathcal{N}(0, \sigma^2)$ for each agent
-3. Compute: $\Delta W_{i,t} = \epsilon_i + \frac{G_t - \sum_j \epsilon_j}{N}$
-4. Constraint: $\sum_i \Delta W_{i,t} = G_t$ (exactly satisfied)
+**Growth rate generation**:
+1. Draw raw growth rates: $\epsilon_i \sim \mathcal{N}(0, \sigma^2)$ for each agent
+2. Calculate wealth-weighted average: $\bar{gr}_t = \frac{\sum_i W_{i,t} \times \epsilon_i}{\sum_i W_{i,t}}$
+3. Adjust to satisfy constraint: $gr_{i,t} = \epsilon_i + (g - \bar{gr}_t)$
+4. Constraint (wealth-weighted average): $\frac{\sum_i W_{i,t} \times gr_{i,t}}{\sum_i W_{i,t}} = g$
 
 **Aggregate wealth evolution** (compound growth):
 $$W_{\text{total},t} = W_{\text{total},0} \times \left(1 + \frac{g}{100}\right)^t$$
+
+**Key property** (multiplicative effect):
+- Agent with $W=1000$ and $gr=5\%$ gains 50 units
+- Agent with $W=100$ and $gr=5\%$ gains 5 units
+- Absolute gaps widen even with same percentage → inequality increases
 
 **Inequality measure** (Gini coefficient):
 $$\text{Gini} = \frac{2 \sum_{i=1}^N i \cdot W_i^{\text{sorted}}}{N \sum_{i=1}^N W_i} - \frac{N+1}{N}$$
@@ -256,7 +261,7 @@ plt.savefig('my_results.png')
 | `initial_wealth_min` | float | Minimum initial wealth | 0.0 | ≥ 0 |
 | `initial_wealth_max` | float | Maximum initial wealth | 100.0 | ≥ initial_wealth_min |
 | `aggregate_growth_per_step` | float | Percentage growth rate per time step (compound) | 2.0 | Any (can be negative) |
-| `wealth_change_std` | float | Standard deviation of individual shocks | 5.0 | ≥ 0 |
+| `wealth_change_std` | float | Standard deviation of individual growth rates (in percentage points) | 5.0 | ≥ 0 |
 | `random_seed` | int or None | Random seed for reproducibility | None | Any integer |
 
 ### Run Parameters
@@ -268,10 +273,10 @@ plt.savefig('my_results.png')
 
 ### Interpretation Guide
 
-- **Higher `wealth_change_std`**: More volatility → greater inequality
-- **Higher `aggregate_growth_per_step`**: Faster wealth accumulation, but inequality dynamics unchanged
-- **Larger `num_agents`**: More stable statistical patterns, smoother distributions
-- **`aggregate_growth_per_step = 0`**: Zero-sum economy, focuses purely on redistribution dynamics
+- **Higher `wealth_change_std`**: More volatility in growth rates → greater inequality through winner/loser dynamics
+- **Higher `aggregate_growth_per_step`**: Faster wealth accumulation AND faster inequality growth (multiplicative compounding accelerates)
+- **Larger `num_agents`**: More stable statistical patterns, smoother distributions, law of large numbers effects
+- **`aggregate_growth_per_step = 0`**: Zero aggregate growth; individual variations create pure redistribution (Gini still increases from random concentration)
 
 ## Results
 

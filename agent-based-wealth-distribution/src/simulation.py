@@ -16,29 +16,30 @@ from .agents import Agent
 @dataclass
 class Simulation:
     """
-    Manages the agent-based wealth distribution simulation.
+    Manages the agent-based wealth distribution simulation with multiplicative growth.
 
     The simulation evolves a population of agents over discrete time steps,
-    with each agent's wealth changing according to a stochastic process
-    constrained by aggregate growth targets.
+    with each agent experiencing heterogeneous growth rates. Rich agents
+    compound faster, leading to increasing inequality over time.
 
     Attributes:
         num_agents: Number of agents in the population
         initial_wealth_min: Minimum initial wealth (uniform distribution)
         initial_wealth_max: Maximum initial wealth (uniform distribution)
-        aggregate_growth_per_step: Percentage growth rate per time step (e.g., 2.0 = 2%)
-        wealth_change_std: Standard deviation of individual wealth changes
+        aggregate_growth_per_step: Aggregate growth rate per time step in % (e.g., 2.0 = 2%)
+        wealth_change_std: Standard deviation of individual growth rates in percentage
+                          points (e.g., 5.0 means rates vary by ±5 percentage points)
         random_seed: Seed for reproducibility (optional)
         agents: List of Agent objects (initialized automatically)
         history: DataFrame tracking wealth over time (populated during simulation)
 
     Economic Intuition:
-        This model captures the dynamics of wealth distribution in an economy where:
+        This model captures wealth concentration dynamics:
         1. Agents start with heterogeneous initial endowments
-        2. The economy grows at a fixed percentage rate (compound growth)
-        3. Individual outcomes are stochastic, creating winners and losers
-        4. The interplay between systematic growth and random shocks drives
-           the evolution of inequality
+        2. Each agent gets their own growth rate drawn from a distribution
+        3. Growth is multiplicative: W[i,t+1] = W[i,t] × (1 + gr[i]/100)
+        4. Rich agents gain more in absolute terms → inequality increases
+        5. The wealth-weighted average of growth rates equals the target rate
     """
 
     num_agents: int = 100
@@ -88,45 +89,52 @@ class Simulation:
 
     def _generate_wealth_changes(self) -> np.ndarray:
         """
-        Generate wealth changes that satisfy the aggregate growth constraint.
+        Generate wealth changes using multiplicative growth with heterogeneous rates.
 
         Returns:
             Array of wealth changes, one per agent
 
         Economic Intuition:
-            Individual wealth changes are drawn from a normal distribution
-            (representing idiosyncratic shocks), then normalized to ensure
-            the aggregate equals the target growth rate. This creates a zero-sum
-            component (relative gains/losses) plus systematic compound growth.
+            Each agent experiences their own growth rate drawn from a distribution.
+            Rich agents compound faster (multiplicative effect), leading to
+            increasing inequality over time. The wealth-weighted average of
+            individual growth rates equals the aggregate target rate.
 
         Algorithm:
-            1. Calculate target absolute growth: current_total × (rate / 100)
-            2. Draw random changes from N(0, σ²)
-            3. Adjust so sum equals target absolute growth:
-               adjusted_change[i] = raw_change[i] + (target - sum(raw)) / n
+            1. Draw individual growth rates: raw_gr[i] ~ N(0, σ²) in percentage points
+            2. Calculate wealth-weighted average: avg = sum(W[i]×raw_gr[i]) / sum(W[i])
+            3. Adjust to satisfy constraint: gr[i] = raw_gr[i] + (GR - avg)
+            4. Calculate absolute changes: change[i] = W[i] × (gr[i] / 100)
+
+        Constraint:
+            sum(W[i] × gr[i]) / sum(W[i]) = aggregate_growth_per_step
         """
-        # Calculate current total wealth
-        current_total_wealth = np.sum([agent.wealth for agent in self.agents])
+        # Get current wealth levels
+        current_wealths = np.array([agent.wealth for agent in self.agents])
+        total_wealth = np.sum(current_wealths)
 
-        # Calculate target absolute growth based on percentage rate
-        target_growth = current_total_wealth * (self.aggregate_growth_per_step / 100.0)
+        # Draw raw growth rates from normal distribution (in percentage points)
+        raw_growth_rates = np.random.normal(0, self.wealth_change_std, self.num_agents)
 
-        # Draw random changes from normal distribution (mean=0)
-        raw_changes = np.random.normal(0, self.wealth_change_std, self.num_agents)
+        # Calculate wealth-weighted average growth rate
+        weighted_avg = np.sum(current_wealths * raw_growth_rates) / total_wealth
 
-        # Calculate the adjustment needed to hit target aggregate growth
-        current_sum = np.sum(raw_changes)
-        adjustment = (target_growth - current_sum) / self.num_agents
+        # Adjust growth rates to satisfy aggregate constraint
+        # All rates shifted by same amount so wealth-weighted average = target
+        adjustment = self.aggregate_growth_per_step - weighted_avg
+        adjusted_growth_rates = raw_growth_rates + adjustment
 
-        # Apply adjustment uniformly to all agents
-        adjusted_changes = raw_changes + adjustment
-
-        # Verify constraint is satisfied (within numerical precision)
+        # Verify constraint (wealth-weighted average should equal target)
+        verify_avg = np.sum(current_wealths * adjusted_growth_rates) / total_wealth
         assert np.isclose(
-            np.sum(adjusted_changes), target_growth
-        ), "Aggregate growth constraint violated"
+            verify_avg, self.aggregate_growth_per_step, rtol=1e-10
+        ), f"Growth rate constraint violated: {verify_avg} != {self.aggregate_growth_per_step}"
 
-        return adjusted_changes
+        # Calculate absolute wealth changes using multiplicative growth
+        # change[i] = W[i] × (gr[i] / 100)
+        wealth_changes = current_wealths * (adjusted_growth_rates / 100.0)
+
+        return wealth_changes
 
     def step(self) -> None:
         """
